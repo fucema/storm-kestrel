@@ -32,12 +32,13 @@ public class KestrelThriftSpout extends BaseRichSpout {
     public static Logger LOG = Logger.getLogger(KestrelThriftSpout.class);
 
     public static final long BLACKLIST_TIME_MS = 1000 * 60;
-    public static final int BATCH_SIZE = 4000;
+    public static final int DEFAULT_BATCH_SIZE = 4000;
 
 
     private List<String> _hosts = null;
     private int _port = -1;
     private String _queueName = null;
+    private int _batchSize = DEFAULT_BATCH_SIZE;
     private SpoutOutputCollector _collector;
     private MultiScheme _scheme;
 
@@ -97,33 +98,42 @@ public class KestrelThriftSpout extends BaseRichSpout {
     }
 
   public KestrelThriftSpout(List<String> hosts, int port, String queueName, Scheme scheme) {
-    this(hosts, port, queueName, new SchemeAsMultiScheme(scheme));
+    this(hosts, port, queueName, DEFAULT_BATCH_SIZE, new SchemeAsMultiScheme(scheme));
   }
 
-  public KestrelThriftSpout(List<String> hosts, int port, String queueName, MultiScheme scheme) {
+  public KestrelThriftSpout(List<String> hosts, int port, String queueName, int batchSize, MultiScheme scheme) {
     if(hosts.isEmpty()) {
       throw new IllegalArgumentException("Must configure at least one host");
     }
     _port = port;
     _hosts = hosts;
     _queueName = queueName;
+    _batchSize = batchSize;
     _scheme = scheme;
   }
 
-  public KestrelThriftSpout(String hostname, int port, String queueName, Scheme scheme) {
-    this(hostname, port, queueName, new SchemeAsMultiScheme(scheme));
-  }
+    public KestrelThriftSpout(String hostname, int port, String queueName, int batchSize, Scheme scheme) {
+        this(hostname, port, queueName, batchSize, new SchemeAsMultiScheme(scheme));
+    }
 
-  public KestrelThriftSpout(String hostname, int port, String queueName, MultiScheme scheme) {
-    this(Arrays.asList(hostname), port, queueName, scheme);
-  }
+    public KestrelThriftSpout(String hostname, int port, String queueName, Scheme scheme) {
+        this(hostname, port, queueName, DEFAULT_BATCH_SIZE, new SchemeAsMultiScheme(scheme));
+    }
 
-    public KestrelThriftSpout(String hostname, int port, String queueName) {
-        this(hostname, port, queueName, new RawMultiScheme());
+    public KestrelThriftSpout(String hostname, int port, String queueName, int batchSize, MultiScheme scheme) {
+        this(Arrays.asList(hostname), port, queueName, batchSize, scheme);
+    }
+
+    public KestrelThriftSpout(String hostname, int port, String queueName, MultiScheme scheme) {
+        this(Arrays.asList(hostname), port, queueName, DEFAULT_BATCH_SIZE, scheme);
+    }
+
+    public KestrelThriftSpout(String hostname, int port, String queueName, int batchSize) {
+        this(hostname, port, queueName, batchSize, new RawMultiScheme());
     }
 
     public KestrelThriftSpout(List<String> hosts, int port, String queueName) {
-        this(hosts, port, queueName, new RawMultiScheme());
+        this(hosts, port, queueName, DEFAULT_BATCH_SIZE, new RawMultiScheme());
     }
 
     public Fields getOutputFields() {
@@ -171,13 +181,13 @@ public class KestrelThriftSpout extends BaseRichSpout {
         if(now > info.blacklistTillTimeMs) {
             List<Item> items = null;
             try {
-                items = info.getValidClient().get(_queueName, BATCH_SIZE, 0, _messageTimeoutMillis);
+                items = info.getValidClient().get(_queueName, DEFAULT_BATCH_SIZE, 0, _messageTimeoutMillis);
             } catch(TException e) {
                 blacklist(info, e);
                 return false;
             }
 
-            assert items.size() <= BATCH_SIZE;
+            assert items.size() <= DEFAULT_BATCH_SIZE;
 //            LOG.info("Kestrel batch get fetched " + items.size() + " items. (batchSize= " + BATCH_SIZE +
 //                     " queueName=" + _queueName + ", index=" + index + ", host=" + info.host + ")");
 
